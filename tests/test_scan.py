@@ -19,3 +19,9 @@ def test_scan_rejects_non_directory(tmp_path):
     f.write_bytes(b"x")
     with pytest.raises(NotADirectoryError):
         scan(f)
+
+
+def test_scan_ignores_dangling_symlinks(tmp_path):
+    (tmp_path / "ok.jpg").write_bytes(b"x")
+    (tmp_path / "dangling.jpg").symlink_to(tmp_path / "nope.jpg")
+    assert [p.name for p in scan(tmp_path)] == ["ok.jpg"]

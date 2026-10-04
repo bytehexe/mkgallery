@@ -6,17 +6,21 @@ from pathlib import Path
 
 from .analyze import analyze
 from .cache import Cache
-from .render import render
+from .errors import GalleryError
+from .render import render, safe_stem
 from .scan import scan
 from .select import select_images
 
 
-class GalleryError(Exception):
-    """A problem the user can fix; reported without a traceback."""
-
-
 def _inside(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
+
+
+def _output_targets(output_dir: Path, title: str) -> list[Path]:
+    """Every path render() writes through; links among them are resolved by the caller."""
+    stem = safe_stem(title)
+    assets = output_dir / f"{stem}_assets"
+    return [output_dir / f"{stem}.html", assets, assets / "thumbs", assets / "full", assets / "lib"]
 
 
 def build_gallery(
@@ -38,6 +42,12 @@ def build_gallery(
             f"Output directory {output_dir} is inside the source directory {src}; "
             "nothing is ever written there."
         )
+    for target in _output_targets(output_dir, title):
+        if _inside(target.resolve(), src):
+            raise GalleryError(
+                f"{target} would be written inside the source directory {src}; "
+                "nothing is ever written there."
+            )
     if cache_dir is not None and _inside(cache_dir.resolve(), src):
         raise GalleryError(
             f"Cache directory {cache_dir} is inside the source directory {src}; "
@@ -64,4 +74,4 @@ def build_gallery(
     log(f"Selected {len(picks)} of {len(result.items)} images")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    return render(picks, title, output_dir)
+    return render(picks, title, output_dir, log)

@@ -3,7 +3,7 @@
 import hashlib
 import re
 import shutil
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +12,7 @@ from urllib.parse import quote
 from jinja2 import Environment, PackageLoader
 from PIL import Image
 
+from .errors import GalleryError
 from .imaging import load_full
 from .model import Analyzed
 
@@ -64,43 +65,67 @@ def _summary(selected: Sequence[Analyzed]) -> str:
     return f"{text} · {first:%b %Y} – {last:%b %Y}"
 
 
-def _reset(directory: Path) -> None:
-    shutil.rmtree(directory, ignore_errors=True)
-    directory.mkdir(parents=True)
+def _convert(item: Analyzed, name: str, full_dir: Path, thumb_dir: Path) -> Photo:
+    with load_full(item.path) as img:
+        full = img.copy()
+    full.thumbnail((FULL_EDGE, FULL_EDGE), Image.Resampling.LANCZOS)
+    full.save(full_dir / name, "JPEG", quality=88, optimize=True, progressive=True)
+    thumb = full.copy()
+    thumb.thumbnail((THUMB_EDGE, THUMB_EDGE), Image.Resampling.LANCZOS)
+    thumb.save(thumb_dir / name, "JPEG", quality=82, optimize=True, progressive=True)
+    return Photo(
+        full=f"full/{name}",
+        thumb=f"thumbs/{name}",
+        width=thumb.width,
+        height=thumb.height,
+        caption=_caption(item.timestamp),
+    )
 
 
-def render(selected: Sequence[Analyzed], title: str, output_dir: Path) -> Path:
+def _replace(target: Path, staged: Path) -> None:
+    shutil.rmtree(target, ignore_errors=True)
+    staged.rename(target)
+
+
+def render(
+    selected: Sequence[Analyzed],
+    title: str,
+    output_dir: Path,
+    log: Callable[[str], None] = lambda _message: None,
+) -> Path:
     stem = safe_stem(title)
     assets = output_dir / f"{stem}_assets"
-    _reset(assets / "thumbs")
-    _reset(assets / "full")
+    assets.mkdir(exist_ok=True)
+
+    # Convert into staging directories first: a failure must not wipe the previous gallery.
+    staged = {name: assets / f"{name}.new" for name in ("thumbs", "full")}
+    for directory in staged.values():
+        shutil.rmtree(directory, ignore_errors=True)
+        directory.mkdir()
+
+    photos: list[Photo] = []
+    converted: list[Analyzed] = []
+    for item in selected:
+        try:
+            photos.append(_convert(item, _asset_name(item.path), staged["full"], staged["thumbs"]))
+            converted.append(item)
+        except Exception as exc:  # noqa: BLE001 - e.g. a RAW whose sensor data is damaged
+            log(f"Skipped {item.path}: {type(exc).__name__}: {exc}")
+
+    if not photos:
+        for directory in staged.values():
+            shutil.rmtree(directory, ignore_errors=True)
+        raise GalleryError("None of the selected images could be converted.")
+
+    for name, directory in staged.items():
+        _replace(assets / name, directory)
     shutil.rmtree(assets / "lib", ignore_errors=True)
     shutil.copytree(VENDOR_DIR, assets / "lib", ignore=shutil.ignore_patterns("VERSIONS.md"))
-
-    photos = []
-    for item in selected:
-        name = _asset_name(item.path)
-        with load_full(item.path) as img:
-            full = img.copy()
-        full.thumbnail((FULL_EDGE, FULL_EDGE), Image.Resampling.LANCZOS)
-        full.save(assets / "full" / name, "JPEG", quality=88, optimize=True, progressive=True)
-        thumb = full.copy()
-        thumb.thumbnail((THUMB_EDGE, THUMB_EDGE), Image.Resampling.LANCZOS)
-        thumb.save(assets / "thumbs" / name, "JPEG", quality=82, optimize=True, progressive=True)
-        photos.append(
-            Photo(
-                full=f"full/{name}",
-                thumb=f"thumbs/{name}",
-                width=thumb.width,
-                height=thumb.height,
-                caption=_caption(item.timestamp),
-            )
-        )
 
     env = Environment(loader=PackageLoader("mkgallery", "templates"), autoescape=True)
     html = env.get_template("page.html.j2").render(
         title=title,
-        summary=_summary(selected),
+        summary=_summary(converted),
         assets_url=quote(f"{stem}_assets"),
         photos=photos,
         libraries=list(LIBRARIES.values()),

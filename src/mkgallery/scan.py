@@ -15,6 +15,8 @@ def scan(src: Path) -> list[Path]:
         for name in files:
             if name.startswith("."):
                 continue
-            if Path(name).suffix.lower() in SUPPORTED_EXTENSIONS:
-                found.append(Path(root) / name)
+            path = Path(root) / name
+            # is_file() follows links, so dangling symlinks are skipped here.
+            if path.suffix.lower() in SUPPORTED_EXTENSIONS and path.is_file():
+                found.append(path)
     return sorted(found)

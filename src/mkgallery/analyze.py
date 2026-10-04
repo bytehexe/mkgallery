@@ -3,6 +3,7 @@
 import multiprocessing
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,17 +64,41 @@ def _safe_metrics(path: Path) -> tuple[Path, Metrics | str]:
         return path, f"{type(exc).__name__}: {exc}"
 
 
-def _compute(paths: Sequence[Path], jobs: int) -> Iterator[tuple[Path, Metrics | str]]:
+# "spawn": forking a multi-threaded process (exiftool helper threads) can deadlock.
+_CONTEXT = multiprocessing.get_context("spawn")
+
+Worker = Callable[[Path], tuple[Path, Metrics | str]]
+
+
+def _isolated(path: Path, worker: Worker) -> tuple[Path, Metrics | str]:
+    """Run one file in its own process, so a hard crash only costs that file."""
+    with ProcessPoolExecutor(max_workers=1, mp_context=_CONTEXT) as pool:
+        try:
+            return pool.submit(worker, path).result()
+        except BrokenProcessPool:
+            return path, "the worker process crashed while reading this file"
+
+
+def _compute(
+    paths: Sequence[Path], jobs: int, worker: Worker
+) -> Iterator[tuple[Path, Metrics | str]]:
     if jobs <= 1:
         for path in paths:
-            yield _safe_metrics(path)
+            yield worker(path)
         return
-    # "spawn": forking a multi-threaded process (exiftool helper threads) can deadlock.
-    context = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=jobs, mp_context=context) as pool:
-        futures = [pool.submit(_safe_metrics, path) for path in paths]
-        for future in as_completed(futures):
-            yield future.result()
+    finished: set[Path] = set()
+    try:
+        with ProcessPoolExecutor(max_workers=jobs, mp_context=_CONTEXT) as pool:
+            futures = [pool.submit(worker, path) for path in paths]
+            for future in as_completed(futures):
+                result = future.result()
+                finished.add(result[0])
+                yield result
+    except BrokenProcessPool:
+        # A worker died (e.g. a crash inside LibRaw); find the culprit file by file.
+        for path in paths:
+            if path not in finished:
+                yield _isolated(path, worker)
 
 
 def analyze(
@@ -81,6 +106,7 @@ def analyze(
     cache: Cache,
     jobs: int = 1,
     progress: Callable[[int, int], None] | None = None,
+    worker: Worker = _safe_metrics,
 ) -> AnalysisResult:
     items: dict[Path, Analyzed] = {}
     misses: list[Path] = []
@@ -94,7 +120,7 @@ def analyze(
     failures: list[tuple[Path, str]] = []
     if misses:
         times = read_times(misses)
-        for done, (path, outcome) in enumerate(_compute(misses, jobs), start=1):
+        for done, (path, outcome) in enumerate(_compute(misses, jobs, worker), start=1):
             if isinstance(outcome, Metrics):
                 item = Analyzed(path, times[path], outcome)
                 cache.put(item)

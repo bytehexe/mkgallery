@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from mkgallery import analyze as analyze_mod
@@ -48,3 +49,21 @@ def test_process_pool_path(tmp_path):
         result = analyze(files, cache, jobs=2, progress=lambda d, t: seen.append((d, t)))
     assert [i.path for i in result.items] == files
     assert seen[-1] == (3, 3)
+
+
+def crashing_worker(path):
+    """Top-level so a spawned worker can import it."""
+    if path.name == "boom.jpg":
+        os._exit(1)
+    return analyze_mod._safe_metrics(path)
+
+
+def test_worker_crash_is_isolated_to_the_bad_file(tmp_path):
+    files = _files(tmp_path, 3)
+    boom = make_image(tmp_path / "boom.jpg", noise=40)
+    with Cache(None) as cache:
+        result = analyze(
+            [files[0], boom, files[1], files[2]], cache, jobs=2, worker=crashing_worker
+        )
+    assert [p for p, _ in result.failures] == [boom]
+    assert [i.path for i in result.items] == files
