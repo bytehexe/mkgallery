@@ -20,11 +20,11 @@ config is read from SRC. Selection idea is ported from `../mkmapdiary`
 
 ```
 mkgallery SRC --title TITLE [--count 48] [--output-dir .] [--cache-dir DIR]
-          [--no-cache] [-j N] [--order chronological|similar]
+          [--no-cache] [-j N] [--order chronological|varied]
 ```
 
-- `--order` defaults to `chronological` (the story of the year); `similar` uses the
-  mkmapdiary annealing order (neighbours look alike).
+- `--order` defaults to `chronological` (the story of the year); `varied` uses the
+  mkmapdiary annealing order (neighbours are visually dissimilar).
 
 - Errors if `--output-dir` is inside SRC (or equals it).
 - `TITLE` is used verbatim in the page (HTML-escaped) and, with path separators and
@@ -56,8 +56,8 @@ mkgallery SRC --title TITLE [--count 48] [--output-dir .] [--cache-dir DIR]
      colour-hash distance + time distance (each min-max normalised, summed); best
      quality per cluster. Hash distances vectorised with numpy.
    - If fewer than `count` candidates remain, take all.
-   - Order: `chronological` (default) sorts the picks by timestamp. `similar` uses
-     `dual_annealing` (seed 42) so neighbours are visually similar, best image
+   - Order: `chronological` (default) sorts the picks by timestamp. `varied` uses
+     `dual_annealing` (seed 42) so neighbouring images are visually dissimilar (the tour minimises neighbour similarity), best image
      rotated to second position.
 5. **Render** (`render.py`): for each selected image only, convert from the *original*
    (RAW developed here, not before) with orientation applied:
