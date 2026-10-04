@@ -26,15 +26,16 @@ mkgallery SRC --title TITLE [--count 48] [--output-dir .] [--cache-dir DIR]
 - `--order` defaults to `chronological` (the story of the year); `varied` uses the
   mkmapdiary annealing order (neighbours are visually dissimilar).
 
-- Errors if `--output-dir` is inside SRC (or equals it).
+- Errors if `--output-dir` or the cache directory is inside SRC (or equals it).
 - `TITLE` is used verbatim in the page (HTML-escaped) and, with path separators and
   control characters replaced, as the file/dir stem.
-- Re-running overwrites `<title>.html` and replaces `<title>_assets/` contents.
+- Re-running overwrites `<title>.html` and replaces the `thumbs/`, `full/` and `lib/` subdirectories of `<title>_assets/` (nothing else in that
+  directory is touched).
 
 ## Pipeline
 
 1. **Scan** (`scan.py`): recursive, read-only walk of SRC. Extensions: jpg, jpeg,
-   png, webp, tif, tiff; RAW via rawpy: cr2, cr3, nef, arw, dng. Case-insensitive.
+   png, webp, tif, tiff; RAW via rawpy: cr2, cr3, nef, arw, dng. Case-insensitive. Hidden files and directories (leading `.`) are skipped.
 2. **Analyse** (`analyze.py`), process pool (`-j`, default CPU count):
    - Small decode only: JPEG via `Image.draft`; RAW via `rawpy.extract_thumb()`
      (falls back to a half-size `postprocess` if no preview). Result ≤1024px.
@@ -42,7 +43,7 @@ mkgallery SRC --title TITLE [--count 48] [--output-dir .] [--cache-dir DIR]
      0.5·norm(contrast) (normalised across the whole set); entropy; `colorhash`;
      `whash`.
    - Timestamp + orientation: one batched exiftool process over all files
-     (`DateTimeOriginal`/`CreateDate`, `Orientation`); fallback file mtime.
+     (`DateTimeOriginal`, `CreateDate`, `ModifyDate`); fallback file mtime.
      Timestamps are naive-local and only used for relative distances and per-day
      duplicate grouping.
 3. **Cache** (`cache.py`): per-image raw metrics (not normalised scores) in a
@@ -72,8 +73,9 @@ Single HTML file (Jinja2 template `templates/page.html.j2`), inline CSS, no fram
 - Libraries bundled in `<title>_assets/lib/`: jQuery, Justified Gallery (JS+CSS),
   GLightbox (JS+CSS). Pinned versions, vendored in the package under
   `src/mkgallery/vendor/` with their original licence texts.
+  Each library's licence file sits beside it in `lib/<name>/`.
 - Markup: `<h1>` title, `<main id="gallery">` with
-  `<a class="glightbox" href="full/…"><img src="thumbs/…" alt="" loading="lazy" width height></a>`
+  `<a class="glightbox" href="full/…"><img src="thumbs/…"  alt="…" width height></a>`
   per image (width/height from the thumbnail, which Justified Gallery needs and which
   avoids layout shift). GLightbox caption: capture date.
 - Justified Gallery handles mixed aspect ratios (rowHeight 220, maxRowHeight 360,
@@ -85,7 +87,7 @@ Single HTML file (Jinja2 template `templates/page.html.j2`), inline CSS, no fram
   text, with a `prefers-color-scheme: dark` variant (deep neutral background);
   thumbnails with a 3px radius, soft fade-in on load, subtle hover dim/scale;
   GLightbox themed to match; tiny muted footer. Responsive down to phone width.
-- **Attribution**: licence texts in `<title>_assets/lib/licenses/` (jQuery, Justified
+- **Attribution**: licence texts in `<title>_assets/lib/<name>/` (jQuery, Justified
   Gallery, GLightbox; all MIT), original copyright banners left intact in the bundled
   files, an HTML comment listing them, and a muted footer line "Built with
   mkgallery · Justified Gallery · GLightbox · jQuery" linking to each project.
