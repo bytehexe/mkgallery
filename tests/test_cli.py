@@ -43,6 +43,46 @@ def test_varied_order_runs(tmp_path):
     assert result.exit_code == 0, result.output
 
 
+def test_selection_options_are_passed_to_the_selector(tmp_path, monkeypatch):
+    src = _library(tmp_path)
+    seen = {}
+    real = build_mod.select_images
+
+    def spy(items, count, order, **options):
+        seen.update(options)
+        return real(items, count, order, **options)
+
+    monkeypatch.setattr(build_mod, "select_images", spy)
+    result = _run(
+        src, "-t", "o", "-n", 3, "-o", tmp_path / "o", "--no-cache", "-j", 1,
+        "--no-event-quota", "--balance", "0.5",
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert seen == {"event_quota": False, "balance": 0.5}
+
+
+def test_selection_option_defaults(tmp_path, monkeypatch):
+    src = _library(tmp_path)
+    seen = {}
+    real = build_mod.select_images
+
+    def spy(items, count, order, **options):
+        seen.update(options)
+        return real(items, count, order, **options)
+
+    monkeypatch.setattr(build_mod, "select_images", spy)
+    result = _run(src, "-t", "o", "-n", 3, "-o", tmp_path / "o", "--no-cache", "-j", 1)
+    assert result.exit_code == 0, result.output
+    assert seen == {"event_quota": True, "balance": 0.0}
+
+
+def test_balance_outside_unit_interval_is_a_usage_error(tmp_path):
+    src = _library(tmp_path)
+    result = _run(src, "-t", "o", "-o", tmp_path / "o", "--no-cache", "--balance", "1.5")
+    assert result.exit_code == 2
+    assert "not in the range" in result.output
+
+
 def test_output_inside_source_is_refused_before_writing(tmp_path):
     src = _library(tmp_path)
     before = tree_snapshot(src)

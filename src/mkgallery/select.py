@@ -6,6 +6,7 @@ duplicate and entropy postprocessors.
 
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import timedelta
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,9 @@ from .model import Analyzed
 QUALITY_STDDEV_FACTOR = 2
 MIN_ENTROPY = 6.5
 DUPLICATE_THRESHOLD = 10
+EVENT_GAP = timedelta(days=1)
+DENSITY_QUANTILE = 0.1
+MEDOID_SWAP_PASSES = 5
 
 
 def _bits(strings: Sequence[str]) -> np.ndarray:
@@ -99,14 +103,58 @@ def _distance(items: Sequence[Analyzed]) -> np.ndarray:
 _ORDERS = ("chronological", "varied")
 
 
+def _density_weights(distance: np.ndarray, balance: float) -> np.ndarray:
+    """Weight each image by ``density ** -balance``, so crowded regions count for less."""
+    off_diagonal = distance[~np.eye(len(distance), dtype=bool)]
+    sigma = max(float(np.quantile(off_diagonal, DENSITY_QUANTILE)), 1e-9)
+    density = np.exp(-distance / sigma).sum(axis=1)
+    return density**-balance
+
+
+def _weighted_medoids(distance: np.ndarray, weights: np.ndarray, count: int) -> np.ndarray:
+    """Greedy start, then swaps: ``count`` medoids minimising the weighted distance to them."""
+
+    def cost(medoids: list[int]) -> float:
+        return float((weights * distance[:, medoids].min(axis=1)).sum())
+
+    medoids: list[int] = []
+    while len(medoids) < count:
+        candidates = [c for c in range(len(distance)) if c not in medoids]
+        medoids.append(min(candidates, key=lambda c: (cost([*medoids, c]), c)))
+    best = cost(medoids)
+    for _ in range(MEDOID_SWAP_PASSES):
+        improved = False
+        for slot in range(count):
+            for candidate in range(len(distance)):
+                if candidate in medoids:
+                    continue
+                trial = [*medoids[:slot], candidate, *medoids[slot + 1 :]]
+                trial_cost = cost(trial)
+                if trial_cost < best - 1e-12:
+                    medoids, best, improved = trial, trial_cost, True
+        if not improved:
+            break
+    labels = distance[:, medoids].argmin(axis=1)
+    labels[medoids] = np.arange(count)  # a medoid always belongs to its own cluster
+    return labels
+
+
 def _cluster_best(
-    items: Sequence[Analyzed], quality: np.ndarray, keep: list[int], count: int
+    items: Sequence[Analyzed],
+    quality: np.ndarray,
+    keep: list[int],
+    count: int,
+    balance: float = 0.0,
 ) -> list[int]:
     """One image per cluster: the highest-quality one."""
     subset = [items[i] for i in keep]
-    labels = AgglomerativeClustering(
-        n_clusters=count, metric="precomputed", linkage="average"
-    ).fit_predict(_distance(subset).astype(np.float64))
+    distance = _distance(subset).astype(np.float64)
+    if balance > 0:
+        labels = _weighted_medoids(distance, _density_weights(distance, balance), count)
+    else:
+        labels = AgglomerativeClustering(
+            n_clusters=count, metric="precomputed", linkage="average"
+        ).fit_predict(distance)
     picks = []
     for label in range(count):
         members = [keep[k] for k in np.flatnonzero(labels == label)]
@@ -136,13 +184,70 @@ def _vary(picks: list[Analyzed], quality: dict[Path, float]) -> list[Analyzed]:
     return arranged[shift:] + arranged[:shift]
 
 
+def split_events(items: Sequence[Analyzed], keep: list[int]) -> list[list[int]]:
+    """Group ``keep`` into events: time-ordered runs with no gap above ``EVENT_GAP``."""
+    events: list[list[int]] = []
+    previous = None
+    for index in sorted(keep, key=lambda i: (items[i].timestamp, i)):
+        stamp = items[index].timestamp
+        if previous is None or stamp - previous > EVENT_GAP:
+            events.append([])
+        events[-1].append(index)
+        previous = stamp
+    return events
+
+
+def allocate_quota(sizes: Sequence[int], count: int) -> list[int]:
+    """Slots per event: one each, the rest in proportion to ``sqrt(size)``, capped at size."""
+    if count < len(sizes):
+        raise ValueError("count must be at least the number of events")
+    if count >= sum(sizes):
+        return list(sizes)
+    quotas = [1] * len(sizes)
+    for _ in range(count - len(sizes)):
+        open_events = [e for e in range(len(sizes)) if quotas[e] < sizes[e]]
+        chosen = max(open_events, key=lambda e: (sizes[e] ** 0.5 / (quotas[e] + 1), -e))
+        quotas[chosen] += 1
+    return quotas
+
+
+def _choose(
+    items: Sequence[Analyzed],
+    quality: np.ndarray,
+    keep: list[int],
+    count: int,
+    event_quota: bool,
+    balance: float,
+) -> list[int]:
+    if not event_quota:
+        return _cluster_best(items, quality, keep, count, balance)
+    events = split_events(items, keep)
+    if len(events) > count:
+        best = [max(e, key=lambda m: (quality[m], -m)) for e in events]
+        return _cluster_best(items, quality, best, count, balance)
+    picks: list[int] = []
+    for members, quota in zip(events, allocate_quota([len(e) for e in events], count), strict=True):
+        if len(members) <= quota:
+            picks += members
+        else:
+            picks += _cluster_best(items, quality, members, quota, balance)
+    return picks
+
+
 def select_images(
-    items: Sequence[Analyzed], count: int, order: str = "chronological"
+    items: Sequence[Analyzed],
+    count: int,
+    order: str = "chronological",
+    *,
+    event_quota: bool = True,
+    balance: float = 0.0,
 ) -> list[Analyzed]:
     if count < 1:
         raise ValueError("count must be at least 1")
     if order not in _ORDERS:
         raise ValueError(f"order must be one of {_ORDERS}, got {order!r}")
+    if not 0 <= balance <= 1:
+        raise ValueError(f"balance must be between 0 and 1, got {balance!r}")
     if not items:
         return []
 
@@ -150,7 +255,7 @@ def select_images(
     quality = quality_scores(ordered)
     keep = eligible(ordered, quality)
     if len(keep) > count:
-        keep = _cluster_best(ordered, quality, keep, count)
+        keep = _choose(ordered, quality, keep, count, event_quota, balance)
     picks = [ordered[i] for i in keep]
 
     if order == "chronological":

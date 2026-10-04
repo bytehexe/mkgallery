@@ -52,6 +52,21 @@ def _progress(done: int, total: int) -> None:
     show_default=True,
     help="chronological: by capture time; varied: neighbours look as different as possible.",
 )
+@click.option(
+    "--event-quota/--no-event-quota",
+    default=True,
+    show_default=True,
+    help="Give every event (a run of days with photos) at least one image, "
+    "so small events are not drowned out by large ones.",
+)
+@click.option(
+    "--balance",
+    type=click.FloatRange(0, 1),
+    default=0.0,
+    show_default=True,
+    help="Down-weight images in crowded regions: 0 treats every image alike, "
+    "1 gives sparse regions the same weight as dense ones.",
+)
 def main(
     src: Path,
     title: str,
@@ -61,6 +76,8 @@ def main(
     no_cache: bool,
     jobs: int | None,
     order: str,
+    event_quota: bool,
+    balance: float,
 ) -> None:
     """Create TITLE.html and TITLE_assets/ summarising the photos below SRC."""
     cache = None if no_cache else cache_dir or Path(platformdirs.user_cache_dir("mkgallery"))
@@ -73,6 +90,8 @@ def main(
             cache_dir=cache,
             jobs=jobs or os.cpu_count() or 1,
             order=order,
+            event_quota=event_quota,
+            balance=balance,
             log=lambda message: click.echo(message, err=True),
             progress=_progress,
         )

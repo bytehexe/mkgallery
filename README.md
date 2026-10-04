@@ -34,6 +34,8 @@ mkgallery SRC --title TITLE [options]
 | `-n, --count` | 48 | Number of images shown |
 | `-o, --output-dir` | `.` | Where to write the output (must not be inside `SRC`) |
 | `--order` | `chronological` | `chronological`, or `varied` (neighbours are as dissimilar as possible) |
+| `--event-quota / --no-event-quota` | on | Every event (a run of days with photos, gaps over 24 h split events) gets at least one image; the other slots are shared in proportion to the square root of the event size |
+| `--balance` | 0 | 0–1. Down-weights images in crowded regions when clustering: 0 treats every image alike, 1 gives sparse regions the same weight as dense ones |
 | `--cache-dir` | user cache dir | Analysis cache (must not be inside `SRC`) |
 | `--no-cache` | | Do not read or write the cache |
 | `-j, --jobs` | CPU count | Parallel workers |
@@ -48,7 +50,8 @@ The selection is ported from [mkmapdiary](https://github.com/bytehexe/mkmapdiary
 2. Near-duplicates (per day), unusually soft images and flat, low-entropy images are dropped.
 3. The rest is clustered by colour and capture time into `--count` groups; the sharpest,
    best-contrast image of each group is chosen. The picks therefore spread over the whole
-   year and over different looks.
+   year and over different looks. With `--event-quota` (the default) this is done per event,
+   so a few photos from a small trip are not lost among thousands from a long holiday.
 4. Only the chosen images are converted (RAW files are developed here) into a thumbnail and
    a 1600 px version.
 

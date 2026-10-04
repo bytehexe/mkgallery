@@ -32,6 +32,8 @@ def build_gallery(
     cache_dir: Path | None = None,
     jobs: int = 1,
     order: str = "chronological",
+    event_quota: bool = True,
+    balance: float = 0.0,
     log: Callable[[str], None] = lambda _message: None,
     progress: Callable[[int, int], None] | None = None,
 ) -> Path:
@@ -75,7 +77,7 @@ def build_gallery(
     if not result.items:
         raise GalleryError("None of the images could be read.")
 
-    picks = select_images(result.items, count, order)
+    picks = select_images(result.items, count, order, event_quota=event_quota, balance=balance)
     if not picks:
         raise GalleryError("No image passed the quality filters.")
     log(f"Selected {len(picks)} of {len(result.items)} images")
