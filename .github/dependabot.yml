@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # mkgallery is a CLI app (project.scripts), not imported as a library by
+  # other projects -- versioning-strategy: increase.
+  - package-ecosystem: "pip"
+    directory: "/"
+    versioning-strategy: increase
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
