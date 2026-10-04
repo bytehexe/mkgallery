@@ -82,13 +82,13 @@ jobs:
       - publish-to-pypi
     steps:
       - name: Create GitHub Release (stable)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: |
           !contains(github.ref_name, 'a') && !contains(github.ref_name, 'b') && !contains(github.ref_name, 'rc')
         with:
           generate_release_notes: true
       - name: Create GitHub Release (pre-release)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: |
           contains(github.ref_name, 'a') || contains(github.ref_name, 'b') || contains(github.ref_name, 'rc')
         with:
