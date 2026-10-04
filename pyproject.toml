@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mkgallery"
+version = "0.1.0"
+description = "Summarise a photo collection as a single gallery page"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE.txt"]
+dependencies = [
+    "click",
+    "imagehash",
+    "jinja2",
+    "numpy",
+    "Pillow>=10",
+    "platformdirs",
+    "pyexiftool",
+    "rawpy",
+    "scikit-learn",
+    "scipy",
+]
+
+[project.scripts]
+mkgallery = "mkgallery.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mkgallery"]
+
+[tool.hatch.envs.types]
+extra-dependencies = ["mypy>=1.0.0"]
+
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/mkgallery tests}"
+
+[tool.hatch.envs.hatch-static-analysis]
+dependencies = ["ruff==0.14.10"]
+config-path = "none"
+
+[tool.mypy]
+disable_error_code = ["import-not-found", "import-untyped"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
