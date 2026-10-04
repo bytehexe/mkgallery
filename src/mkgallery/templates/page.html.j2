@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<!--
+  Bundled libraries (all MIT licensed; licence texts are in {{ assets_url }}/lib/<name>/):
+  jQuery, Justified Gallery (https://github.com/miromannino/Justified-Gallery),
+  GLightbox (https://github.com/biati-digital/glightbox).
+-->
+<link rel="stylesheet" href="{{ assets_url }}/lib/justifiedgallery/justifiedGallery.min.css">
+<link rel="stylesheet" href="{{ assets_url }}/lib/glightbox/glightbox.min.css">
+<style>
+  :root {
+    --bg: #f7f5f1; --fg: #1c1b19; --muted: #8a857c; --rule: #ddd8ce; --accent: #b4562f;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131312; --fg: #ece9e2; --muted: #8d887e; --rule: #2c2b28; --accent: #d9825b; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1760px; margin: 0 auto;
+    padding: clamp(1.5rem, 5vw, 4.5rem) clamp(1rem, 3.5vw, 3rem) 2.5rem;
+  }
+  header { margin-bottom: clamp(1.5rem, 4vw, 3rem); }
+  h1 {
+    margin: 0; font-weight: 300; letter-spacing: -0.02em; line-height: 1.02;
+    font-size: clamp(2.4rem, 7vw, 5.5rem); overflow-wrap: anywhere;
+    font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  .summary {
+    margin: 1rem 0 0; color: var(--muted); font-size: .8rem;
+    letter-spacing: .14em; text-transform: uppercase;
+  }
+  .summary::before {
+    content: ""; display: block; width: 3rem; height: 2px;
+    background: var(--accent); margin-bottom: 1rem;
+  }
+  #gallery a { display: block; border-radius: 3px; background: var(--rule); }
+  #gallery img { transition: transform .6s cubic-bezier(.2, .6, .2, 1); }
+  #gallery a:hover img { transform: scale(1.035); }
+  footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule);
+    color: var(--muted); font-size: .75rem;
+  }
+  footer a { color: inherit; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  footer a:hover { color: var(--fg); }
+  @media (prefers-reduced-motion: reduce) { #gallery img { transition: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>{{ title }}</h1>
+    <p class="summary">{{ summary }}</p>
+  </header>
+  <main id="gallery">
+{%- for photo in photos %}
+    <a class="glightbox" href="{{ assets_url }}/{{ photo.full }}" data-description="{{ photo.caption }}"><img src="{{ assets_url }}/{{ photo.thumb }}" width="{{ photo.width }}" height="{{ photo.height }}" alt="Photo from {{ photo.caption }}"></a>
+{%- endfor %}
+  </main>
+  <footer>
+    Made with mkgallery · Built with
+    {% for name, url in libraries -%}
+      <a href="{{ url }}">{{ name }}</a>{{ ", " if not loop.last else "" }}
+    {%- endfor %}
+  </footer>
+</div>
+<script src="{{ assets_url }}/lib/jquery/jquery.min.js"></script>
+<script src="{{ assets_url }}/lib/justifiedgallery/jquery.justifiedGallery.min.js"></script>
+<script src="{{ assets_url }}/lib/glightbox/glightbox.min.js"></script>
+<script>
+  $("#gallery").justifiedGallery({
+    rowHeight: 220, maxRowHeight: 360, margins: 6, border: 0, lastRow: "center"
+  });
+  GLightbox({ selector: ".glightbox", loop: true });
+</script>
+</body>
+</html>
