@@ -43,10 +43,17 @@ def build_gallery(
             "nothing is ever written there."
         )
     for target in _output_targets(output_dir, title):
-        if _inside(target.resolve(), src):
+        resolved = target.resolve()
+        if _inside(resolved, src):
             raise GalleryError(
                 f"{target} would be written inside the source directory {src}; "
                 "nothing is ever written there."
+            )
+        # render() deletes and replaces these paths, so the source must not live below one.
+        if _inside(src, resolved):
+            raise GalleryError(
+                f"The source directory {src} is inside {target}, which would be replaced; "
+                "nothing in the source is ever deleted."
             )
     if cache_dir is not None and _inside(cache_dir.resolve(), src):
         raise GalleryError(

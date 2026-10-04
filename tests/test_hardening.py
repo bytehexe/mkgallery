@@ -31,6 +31,16 @@ def test_source_that_is_the_assets_dir_is_refused_without_deleting(tmp_path):
     assert tree_snapshot(src) == before
 
 
+def test_source_nested_below_a_replaced_assets_dir_is_refused_without_deleting(tmp_path):
+    base = tmp_path / "base"
+    src = base / "Trip_assets" / "full" / "sub"
+    _images(src)
+    before = tree_snapshot(src)
+    with pytest.raises(GalleryError, match="inside"):
+        build_gallery(src, "Trip", output_dir=base)
+    assert tree_snapshot(src) == before
+
+
 def test_assets_symlink_into_source_is_refused(tmp_path):
     src = tmp_path / "photos"
     _images(src)
