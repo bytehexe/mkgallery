@@ -54,7 +54,7 @@ def _progress(done: int, total: int) -> None:
 )
 @click.option(
     "--event-quota/--no-event-quota",
-    default=True,
+    default=False,
     show_default=True,
     help="Give every event (a run of days with photos) at least one image, "
     "so small events are not drowned out by large ones.",
@@ -62,7 +62,7 @@ def _progress(done: int, total: int) -> None:
 @click.option(
     "--balance",
     type=click.FloatRange(0, 1),
-    default=0.0,
+    default=1.0,
     show_default=True,
     help="Down-weight images in crowded regions: 0 treats every image alike, "
     "1 gives sparse regions the same weight as dense ones.",

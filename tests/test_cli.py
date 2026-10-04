@@ -73,7 +73,7 @@ def test_selection_option_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr(build_mod, "select_images", spy)
     result = _run(src, "-t", "o", "-n", 3, "-o", tmp_path / "o", "--no-cache", "-j", 1)
     assert result.exit_code == 0, result.output
-    assert seen == {"event_quota": True, "balance": 0.0}
+    assert seen == {"event_quota": False, "balance": 1.0}
 
 
 def test_balance_outside_unit_interval_is_a_usage_error(tmp_path):
