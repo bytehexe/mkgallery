@@ -6,8 +6,10 @@ duplicate and entropy postprocessors.
 
 from collections import defaultdict
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
+from scipy.optimize import dual_annealing
 from sklearn.cluster import AgglomerativeClustering
 
 from .model import Analyzed
@@ -96,3 +98,66 @@ def _distance(items: Sequence[Analyzed]) -> np.ndarray:
     colour = _scale(_hamming(_bits([i.metrics.colorhash for i in items])))
     seconds = np.array([i.timestamp.timestamp() for i in items])
     return colour + _scale(_time_matrix(seconds))
+
+
+_ORDERS = ("chronological", "varied")
+
+
+def _cluster_best(
+    items: Sequence[Analyzed], quality: np.ndarray, keep: list[int], count: int
+) -> list[int]:
+    """One image per cluster: the highest-quality one."""
+    subset = [items[i] for i in keep]
+    labels = AgglomerativeClustering(
+        n_clusters=count, metric="precomputed", linkage="average"
+    ).fit_predict(_distance(subset).astype(np.float64))
+    picks = []
+    for label in range(count):
+        members = [keep[k] for k in np.flatnonzero(labels == label)]
+        picks.append(max(members, key=lambda m: (quality[m], -m)))
+    return picks
+
+
+def _vary(picks: list[Analyzed], quality: dict[Path, float]) -> list[Analyzed]:
+    """Order so that neighbouring images are as dissimilar as possible.
+
+    Same objective as mkmapdiary: minimise the summed *similarity* between
+    consecutive images, then rotate the best image to the second position.
+    """
+    if len(picks) <= 2:
+        return picks
+    distance = _distance(picks)
+    similarity = distance.max() - distance
+
+    def tour_length(x: np.ndarray) -> float:
+        order = np.argsort(x)
+        return float(similarity[order, np.roll(order, -1)].sum())
+
+    result = dual_annealing(tour_length, [(0, 1)] * len(picks), seed=42)
+    arranged = [picks[i] for i in np.argsort(result.x)]
+    best = max(range(len(arranged)), key=lambda i: quality[arranged[i].path])
+    shift = (best - 1) % len(arranged)
+    return arranged[shift:] + arranged[:shift]
+
+
+def select_images(
+    items: Sequence[Analyzed], count: int, order: str = "chronological"
+) -> list[Analyzed]:
+    if count < 1:
+        raise ValueError("count must be at least 1")
+    if order not in _ORDERS:
+        raise ValueError(f"order must be one of {_ORDERS}, got {order!r}")
+    if not items:
+        return []
+
+    ordered = sorted(items, key=lambda i: str(i.path))
+    quality = quality_scores(ordered)
+    keep = eligible(ordered, quality)
+    if len(keep) > count:
+        keep = _cluster_best(ordered, quality, keep, count)
+    picks = [ordered[i] for i in keep]
+
+    if order == "chronological":
+        return sorted(picks, key=lambda i: (i.timestamp, str(i.path)))
+    quality_by_path = {ordered[i].path: float(quality[i]) for i in range(len(ordered))}
+    return _vary(picks, quality_by_path)
