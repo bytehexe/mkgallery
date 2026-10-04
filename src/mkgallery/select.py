@@ -86,11 +86,7 @@ def eligible(items: Sequence[Analyzed], quality: np.ndarray) -> list[int]:
     if not items:
         return []
     drop = duplicates(items, quality) | low_quality(quality)
-    return [
-        i
-        for i, item in enumerate(items)
-        if not drop[i] and item.metrics.entropy > MIN_ENTROPY
-    ]
+    return [i for i, item in enumerate(items) if not drop[i] and item.metrics.entropy > MIN_ENTROPY]
 
 
 def _distance(items: Sequence[Analyzed]) -> np.ndarray:

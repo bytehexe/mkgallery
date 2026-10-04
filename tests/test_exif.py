@@ -31,8 +31,7 @@ def test_unreadable_file_does_not_break_the_batch(tmp_path):
 
 def test_chunking(tmp_path):
     paths = [
-        make_image(tmp_path / f"{i}.jpg", taken=datetime(2025, 1, 1 + i, 0, 0, 0))
-        for i in range(5)
+        make_image(tmp_path / f"{i}.jpg", taken=datetime(2025, 1, 1 + i, 0, 0, 0)) for i in range(5)
     ]
     times = read_times(paths, chunk_size=2)
     assert [times[p].day for p in paths] == [1, 2, 3, 4, 5]

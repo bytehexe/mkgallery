@@ -42,5 +42,8 @@ config-path = "none"
 [tool.mypy]
 disable_error_code = ["import-not-found", "import-untyped"]
 
+[tool.ruff]
+line-length = 100
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]

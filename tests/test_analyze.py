@@ -8,9 +8,7 @@ from tests.conftest import make_image
 
 def _files(tmp_path, n=3):
     return [
-        make_image(
-            tmp_path / f"{i}.jpg", noise=40, seed=i, taken=datetime(2025, 1, 1 + i, 9, 0, 0)
-        )
+        make_image(tmp_path / f"{i}.jpg", noise=40, seed=i, taken=datetime(2025, 1, 1 + i, 9, 0, 0))
         for i in range(n)
     ]
 
