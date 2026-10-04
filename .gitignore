@@ -7,3 +7,4 @@ build/
 .ruff_cache/
 .pytest_cache/
 .superpowers/
+src/mkgallery/__about__.py

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mkgallery"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Summarise a photo collection as a single gallery page"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,6 +25,18 @@ dependencies = [
 
 [project.scripts]
 mkgallery = "mkgallery.cli:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.vcs]
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/mkgallery/__about__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mkgallery"]
